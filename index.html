@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pip Calc">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+html, body { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+<title>Gold BTC Pip Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: one centred column. Instrument switch, a single linked converter panel, a per-lot value strip, collapsible contract specs, then a per-lot reference table. */
+:root {
+  --bg: #F3F5F6;
+  --surface: #FFFFFF;
+  --fg: #15181C;
+  --muted: #59616B;
+  --line: #D8DCE1;
+  --acc-gold: #946900;
+  --acc-btc: #C25A00;
+  --pos: #17794A;
+  --neg: #BF3128;
+  --font-display: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-num: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1214;
+    --surface: #171B1F;
+    --fg: #ECEFF1;
+    --muted: #98A0A9;
+    --line: #2A3036;
+    --acc-gold: #E3B240;
+    --acc-btc: #F7931A;
+    --pos: #4CC38A;
+    --neg: #FF7D72;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1214;
+  --surface: #171B1F;
+  --fg: #ECEFF1;
+  --muted: #98A0A9;
+  --line: #2A3036;
+  --acc-gold: #E3B240;
+  --acc-btc: #F7931A;
+  --pos: #4CC38A;
+  --neg: #FF7D72;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.app {
+  --accent: var(--acc-gold);
+  max-width: 720px;
+  margin: 0 auto;
+  display: grid;
+  gap: 20px;
+}
+.app[data-inst="btc"] { --accent: var(--acc-btc); }
+
+h1, h2 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+h1 { font-size: 28px; line-height: 1.15; font-weight: 600; letter-spacing: -0.01em; }
+h2 { font-size: 16px; font-weight: 600; }
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 60ch; }
+
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.seg button {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  padding: 12px 14px; text-align: left;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+}
+.seg .nm { font-family: var(--font-display); font-weight: 600; font-size: 17px; }
+.seg .sym { font-family: var(--font-num); font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+.seg button[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: color-mix(in srgb, var(--accent) 11%, var(--surface));
+}
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+.lot-row { display: flex; flex-wrap: wrap; align-items: end; gap: 14px 18px; padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.lot-row .field { flex: 0 1 180px; min-width: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  padding: 8px 12px; min-width: 56px; border-radius: 6px;
+  background: transparent; border: 1px solid var(--line);
+  font-family: var(--font-num); font-size: 13px;
+}
+.chip.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 16px; }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.inwrap {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 0 12px;
+}
+.inwrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.inwrap input {
+  flex: 1; min-width: 0; width: 100%;
+  border: 0; outline: 0; background: transparent; color: var(--fg);
+  font-family: var(--font-num); font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums;
+  padding: 11px 0;
+}
+.inwrap.small input { font-size: 16px; padding: 9px 0; }
+.affix { font-family: var(--font-num); font-size: 13px; color: var(--muted); white-space: nowrap; }
+.sub { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.money .inwrap { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.money.pos input { color: var(--pos); }
+.money.neg input { color: var(--neg); }
+.hint { margin: 16px 0 0; font-size: 13px; color: var(--muted); }
+
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 12px; }
+.stat { border-top: 2px solid var(--accent); padding-top: 8px; min-width: 0; }
+.stat .k { font-size: 12px; color: var(--muted); }
+.stat .v { font-family: var(--font-display); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+details.specs summary { cursor: pointer; font-family: var(--font-display); font-weight: 600; font-size: 16px; }
+details.specs[open] summary { margin-bottom: 14px; }
+.specs .grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); }
+.note { margin: 14px 0 0; font-size: 13px; color: var(--muted); max-width: 65ch; }
+.reset { margin-top: 12px; padding: 8px 12px; border-radius: 6px; background: transparent; border: 1px solid var(--line); font-size: 13px; }
+
+.tablewrap { overflow-x: auto; margin-top: 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 440px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+td { font-family: var(--font-num); font-size: 14px; }
+tr.on td { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .seg button, .chip, .inwrap { transition: border-color 0.12s ease, background-color 0.12s ease; }
+}
+</style>
+</head>
+<body>
+
+<main class="app" id="app" data-inst="gold">
+  <header>
+    <h1>Pip &amp; Point Calculator</h1>
+    <p class="lede">Convert between points, pips, price move and profit or loss for gold and Bitcoin. Edit any field and the rest follow.</p>
+  </header>
+
+  <div class="seg" role="group" aria-label="Instrument">
+    <button type="button" data-inst="gold" aria-pressed="true"><span class="nm">Gold</span><span class="sym">XAUUSD</span></button>
+    <button type="button" data-inst="btc" aria-pressed="false"><span class="nm">Bitcoin</span><span class="sym">BTCUSD</span></button>
+  </div>
+
+  <div class="seg" role="group" aria-label="Account type" id="acct">
+    <button type="button" data-acct="usd" aria-pressed="true"><span class="nm">Dollar account</span><span class="sym">STD / MINI / MICRO</span></button>
+    <button type="button" data-acct="cent" aria-pressed="false"><span class="nm">Cent account</span><span class="sym">BALANCE IN &cent;</span></button>
+  </div>
+
+  <section class="panel" aria-label="Converter">
+    <div class="lot-row">
+      <div class="field">
+        <label for="lots">Lot size</label>
+        <div class="inwrap"><input id="lots" inputmode="decimal" autocomplete="off" spellcheck="false"><span class="affix">lots</span></div>
+      </div>
+      <div class="chips" id="chips" role="group" aria-label="Common lot sizes">
+        <button type="button" class="chip" data-lot="0.01">0.01 Micro</button>
+        <button type="button" class="chip" data-lot="0.1">0.10 Mini</button>
+        <button type="button" class="chip" data-lot="0.5">0.50</button>
+        <button type="button" class="chip" data-lot="1">1.00 Standard</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="field">
+        <label for="f-points">Points</label>
+        <div class="inwrap"><input id="f-points" inputmode="decimal" autocomplete="off" spellcheck="false"><span class="affix">pts</span></div>
+        <span class="sub" id="sub-points"></span>
+      </div>
+      <div class="field">
+        <label for="f-pips">Pips</label>
+        <div class="inwrap"><input id="f-pips" inputmode="decimal" autocomplete="off" spellcheck="false"><span class="affix">pips</span></div>
+        <span class="sub" id="sub-pips"></span>
+      </div>
+      <div class="field">
+        <label for="f-move">Price move</label>
+        <div class="inwrap"><span class="affix">$</span><input id="f-move" inputmode="decimal" autocomplete="off" spellcheck="false"></div>
+        <span class="sub" id="sub-move"></span>
+      </div>
+      <div class="field money" id="money-field">
+        <label for="f-money">Profit / loss</label>
+        <div class="inwrap"><span class="affix" id="money-affix">$</span><input id="f-money" inputmode="decimal" autocomplete="off" spellcheck="false"></div>
+        <span class="sub" id="sub-money"></span>
+      </div>
+    </div>
+    <p class="hint">Use a minus sign for a move against you. Changing the lot size keeps the field you last edited fixed and updates the others.</p>
+  </section>
+
+  <section aria-label="Value at this lot size">
+    <div class="strip">
+      <div class="stat"><div class="k">1 point is worth</div><div class="v" id="v-point"></div></div>
+      <div class="stat"><div class="k">1 pip is worth</div><div class="v" id="v-pip"></div></div>
+      <div class="stat"><div class="k">A $1 move is worth</div><div class="v" id="v-dollar"></div></div>
+    </div>
+  </section>
+
+  <details class="panel specs" id="specs">
+    <summary id="specs-title">Contract specs</summary>
+    <div class="grid">
+      <div class="field">
+        <label for="s-point">Point size</label>
+        <div class="inwrap small"><span class="affix">$</span><input id="s-point" inputmode="decimal" autocomplete="off" spellcheck="false"></div>
+      </div>
+      <div class="field">
+        <label for="s-pip">Pip size</label>
+        <div class="inwrap small"><span class="affix">$</span><input id="s-pip" inputmode="decimal" autocomplete="off" spellcheck="false"></div>
+      </div>
+      <div class="field">
+        <label for="s-contract">Contract size</label>
+        <div class="inwrap small"><input id="s-contract" inputmode="decimal" autocomplete="off" spellcheck="false"><span class="affix" id="s-unit"></span></div>
+      </div>
+    </div>
+    <p class="note" id="specs-note"></p>
+    <button type="button" class="reset" id="reset">Reset to defaults</button>
+  </details>
+
+  <section aria-label="Value per lot size">
+    <h2>Value per lot size</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Lots</th><th>Per point</th><th>Per pip</th><th>Per $1 move</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var KEY = 'gold-btc-pip-calc-v1';
+  var KEYS = ['points', 'pips', 'move', 'money'];
+  var NOTES = {
+    gold: 'Gold usually quotes two decimals, so a point is 0.01 and a pip is 0.10. A standard lot is 100 oz, which makes 1 pip on 1 lot worth $10.',
+    btc: 'Bitcoin contracts differ a lot between brokers. A common setup is 1 BTC per lot with a $1 move counted as one pip. Match these values to your broker’s symbol specification.'
+  };
+  var DEF = {
+    gold: { sym: 'XAUUSD', name: 'Gold', unit: 'oz per lot', unitShort: 'oz', lots: 0.1, point: 0.01, pip: 0.1, contract: 100, anchor: 'pips', val: 25 },
+    btc: { sym: 'BTCUSD', name: 'Bitcoin', unit: 'BTC per lot', unitShort: 'BTC', lots: 0.1, point: 0.01, pip: 1, contract: 1, anchor: 'move', val: 500 }
+  };
+  var LOT_ROWS = [0.01, 0.05, 0.1, 0.5, 1, 5];
+
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function isPos(n) { return typeof n === 'number' && isFinite(n) && n > 0; }
+  function $(id) { return document.getElementById(id); }
+
+  var state = { inst: 'gold', cent: false, gold: clone(DEF.gold), btc: clone(DEF.btc) };
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (raw) {
+      var p = JSON.parse(raw);
+      if (p && (p.inst === 'gold' || p.inst === 'btc')) {
+        ['gold', 'btc'].forEach(function (k) {
+          var s = p[k];
+          if (s && isPos(s.lots) && isPos(s.point) && isPos(s.pip) && isPos(s.contract) &&
+              typeof s.val === 'number' && isFinite(s.val) && KEYS.indexOf(s.anchor) > -1) {
+            state[k] = Object.assign(clone(DEF[k]), {
+              lots: s.lots, point: s.point, pip: s.pip, contract: s.contract, anchor: s.anchor, val: s.val
+            });
+          }
+        });
+        state.inst = p.inst;
+        state.cent = p.cent === true;
+      }
+    }
+  } catch (e) { /* storage unavailable, defaults apply */ }
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } }
+  function cur() { return state[state.inst]; }
+
+  function num(str) {
+    var s = String(str).replace(/,/g, '').trim();
+    if (s === '' || s === '-' || s === '.' || s === '-.') return NaN;
+    var n = Number(s);
+    return isFinite(n) ? n : NaN;
+  }
+  function fmt(n, d) {
+    if (!isFinite(n)) return '';
+    var s = n.toFixed(d);
+    if (s.indexOf('.') > -1) s = s.replace(/0+$/, '').replace(/\.$/, '');
+    if (s === '-0') s = '0';
+    return s;
+  }
+  function mult() { return state.cent ? 100 : 1; }
+  function usd(n) {
+    if (state.cent) {
+      return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: Math.abs(n) < 1 ? 4 : 2 }) + '¢';
+    }
+    var big = Math.abs(n) >= 0.1;
+    return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: big ? 2 : 4 });
+  }
+
+  function compute(s) {
+    var per = s.contract * s.lots * mult();
+    var d;
+    if (s.anchor === 'points') d = s.val * s.point;
+    else if (s.anchor === 'pips') d = s.val * s.pip;
+    else if (s.anchor === 'move') d = s.val;
+    else d = per > 0 ? s.val / per : NaN;
+    return { points: d / s.point, pips: d / s.pip, move: d, money: d * per };
+  }
+
+  var app = $('app');
+  var fields = { points: $('f-points'), pips: $('f-pips'), move: $('f-move'), money: $('f-money') };
+  var lotsEl = $('lots');
+  var specEls = { point: $('s-point'), pip: $('s-pip'), contract: $('s-contract') };
+
+  function render(skip) {
+    var s = cur();
+    var r = compute(s);
+    KEYS.forEach(function (k) {
+      if (k === skip) return;
+      var v = r[k];
+      if (k === 'money') {
+        if (isFinite(v) && Math.abs(v) < 0.005) v = 0;
+        fields[k].value = isFinite(v) ? v.toFixed(2) : '';
+      } else {
+        fields[k].value = isFinite(v) ? fmt(v, 6) : '';
+      }
+    });
+    var mf = $('money-field');
+    mf.classList.toggle('pos', isFinite(r.money) && r.money > 0.004);
+    mf.classList.toggle('neg', isFinite(r.money) && r.money < -0.004);
+
+    $('sub-points').textContent = '1 point = ' + fmt(s.point, 8) + ' in price';
+    $('sub-pips').textContent = '1 pip = ' + fmt(s.pip, 8) + ' in price';
+    $('sub-move').textContent = 'Distance the price travelled, in USD';
+    $('sub-money').textContent = fmt(s.lots, 4) + ' lots × ' + fmt(s.contract, 4) + ' ' + s.unitShort + (state.cent ? ' · cent account' : '');
+    $('money-affix').textContent = state.cent ? '¢' : '$';
+
+    var per = s.contract * s.lots * mult();
+    $('v-point').textContent = usd(s.point * per);
+    $('v-pip').textContent = usd(s.pip * per);
+    $('v-dollar').textContent = usd(per);
+
+    Array.prototype.forEach.call($('chips').children, function (b) {
+      b.classList.toggle('on', Math.abs(parseFloat(b.getAttribute('data-lot')) - s.lots) < 1e-9);
+    });
+
+    var rows = LOT_ROWS.map(function (L) {
+      var p = s.contract * L * mult();
+      var on = Math.abs(L - s.lots) < 1e-9 ? ' class="on"' : '';
+      return '<tr' + on + '><td>' + L.toFixed(2) + '</td><td>' + usd(s.point * p) + '</td><td>' + usd(s.pip * p) + '</td><td>' + usd(p) + '</td></tr>';
+    });
+    $('tbody').innerHTML = rows.join('');
+  }
+
+  function fillSpecs() {
+    var s = cur();
+    specEls.point.value = fmt(s.point, 8);
+    specEls.pip.value = fmt(s.pip, 8);
+    specEls.contract.value = fmt(s.contract, 8);
+    $('s-unit').textContent = s.unit;
+    $('specs-title').textContent = 'Contract specs for ' + s.sym;
+    $('specs-note').textContent = NOTES[state.inst];
+  }
+
+  function setInst(k) {
+    state.inst = k;
+    app.setAttribute('data-inst', k);
+    Array.prototype.forEach.call(document.querySelectorAll('.seg button[data-inst]'), function (b) {
+      b.setAttribute('aria-pressed', b.getAttribute('data-inst') === k ? 'true' : 'false');
+    });
+    lotsEl.value = fmt(cur().lots, 4);
+    syncAcct();
+    fillSpecs();
+    render(null);
+    save();
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.seg button[data-inst]'), function (b) {
+    b.addEventListener('click', function () { setInst(b.getAttribute('data-inst')); });
+  });
+
+  KEYS.forEach(function (k) {
+    fields[k].addEventListener('input', function () {
+      var n = num(fields[k].value);
+      if (isNaN(n)) return;
+      var s = cur();
+      s.anchor = k;
+      s.val = n;
+      save();
+      render(k);
+    });
+  });
+
+  lotsEl.addEventListener('input', function () {
+    var n = num(lotsEl.value);
+    if (!(n > 0)) return;
+    cur().lots = n;
+    save();
+    render(null);
+  });
+
+  Array.prototype.forEach.call($('chips').children, function (b) {
+    b.addEventListener('click', function () {
+      var n = parseFloat(b.getAttribute('data-lot'));
+      cur().lots = n;
+      lotsEl.value = fmt(n, 4);
+      save();
+      render(null);
+    });
+  });
+
+  Object.keys(specEls).forEach(function (k) {
+    specEls[k].addEventListener('input', function () {
+      var n = num(specEls[k].value);
+      if (!(n > 0)) return;
+      cur()[k] = n;
+      save();
+      render(null);
+    });
+  });
+
+  $('reset').addEventListener('click', function () {
+    var s = cur(), d = DEF[state.inst];
+    s.point = d.point; s.pip = d.pip; s.contract = d.contract;
+    fillSpecs();
+    render(null);
+    save();
+  });
+
+  function syncAcct() {
+    Array.prototype.forEach.call(document.querySelectorAll('#acct button'), function (b) {
+      var isCent = b.getAttribute('data-acct') === 'cent';
+      b.setAttribute('aria-pressed', isCent === state.cent ? 'true' : 'false');
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('#acct button'), function (b) {
+    b.addEventListener('click', function () {
+      var toCent = b.getAttribute('data-acct') === 'cent';
+      if (toCent === state.cent) return;
+      // Keep a fixed profit/loss figure meaning the same amount of money.
+      ['gold', 'btc'].forEach(function (k) {
+        if (state[k].anchor === 'money') state[k].val = toCent ? state[k].val * 100 : state[k].val / 100;
+      });
+      state.cent = toCent;
+      syncAcct();
+      render(null);
+      save();
+    });
+  });
+
+  setInst(state.inst);
+})();
+</script>
+</body>
+</html>
